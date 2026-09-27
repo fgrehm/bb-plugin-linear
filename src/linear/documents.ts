@@ -386,7 +386,18 @@ export const EXISTENCE_PAGE_SIZE = 100;
  * merely closed (Linear still has it) or genuinely gone (Linear does not).
  *
  * `includeArchived: true` on purpose: archiving is reversible and an archived
- * issue is still an issue. Only a real absence means deleted.
+ * issue is still an issue, so a plain absence must not delete it.
+ *
+ * **`trashed` on purpose, and it is the whole answer.** A *deleted* issue is
+ * not absent from this connection: with `includeArchived: true`, Linear still
+ * returns it, with `archivedAt` set, exactly as it returns an archived one.
+ * The only thing that separates the two is `Issue.trashed`, and without it
+ * every deletion reads as "still alive" and the mirror row survives forever.
+ * That is not hypothetical: a real workspace carried 26 deleted issues in its
+ * panel, to the reader and to every agent tool, and a full sync did not
+ * clear them. Archiving hides them incidentally, because a trashed issue
+ * reports `archivedAt`, but a row that is never re-fetched keeps whatever
+ * `archivedAt` it had, so the panel shows them.
  *
  * Ids only — this is a liveness probe, not a fetch. The whole point is that
  * it costs almost nothing to run on the tail of a walk that already happened.
@@ -398,6 +409,7 @@ export const ISSUES_EXIST = doc(
   issues(first: $first, includeArchived: true, filter: { id: { in: $ids } }) {
     nodes {
       id
+      trashed
     }
     pageInfo {
       hasNextPage

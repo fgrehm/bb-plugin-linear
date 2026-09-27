@@ -207,6 +207,12 @@ export async function backfillTeams(
  * Runs only after a COMPLETE walk. A truncated one did not read every open
  * issue, so "not seen" would mostly mean "not reached", and the sweep would
  * delete live work.
+ *
+ * **A deleted issue is not absent, it is `trashed`.** The probe runs with
+ * `includeArchived: true`, so Linear returns deleted issues too, with
+ * `archivedAt` set, and a sweep that only checked for absence read every one
+ * of them as alive. `trashed` is the only field that separates a real delete
+ * from a reversible archive, and it is what this keys on.
  */
 async function sweepDeleted(
   deps: BackfillDeps,
@@ -225,17 +231,21 @@ async function sweepDeleted(
   for (let index = 0; index < candidates.length && index < EXISTENCE_SWEEP_LIMIT; index += EXISTENCE_PAGE_SIZE) {
     if (deps.signal?.aborted) break;
     const batch = candidates.slice(index, index + EXISTENCE_PAGE_SIZE);
-    let live: ReadonlySet<string>;
+    let probed: ReadonlyMap<string, boolean | null | undefined>;
     try {
       const result = await deps.client.issuesExist(batch, { initiator: "background" });
-      live = new Set(result.issues.nodes.map((node) => node.id));
+      probed = new Map(result.issues.nodes.map((node) => [node.id, node.trashed]));
     } catch (error) {
       // A failed probe proves nothing. Deleting on "we could not ask" would
       // turn a rate limit into data loss.
       deps.log?.("debug", `Existence check skipped: ${describeError(error)}`);
       break;
     }
-    const gone = batch.filter((id) => !live.has(id));
+    // Absent from the probe means Linear has no such id at all. Present with
+    // `trashed` means it was deleted. Present without it means archived,
+    // which is reversible, so it stays. The `has` test matters: a node that
+    // comes back without the field is alive, not missing.
+    const gone = batch.filter((id) => !probed.has(id) || probed.get(id) === true);
     if (gone.length > 0) {
       deps.store.deleteIssues(gone);
       removed += gone.length;
@@ -247,3 +257,19 @@ async function sweepDeleted(
   }
   return removed;
 }
+
+/*
+ * What this still does not reach, stated rather than left to be discovered:
+ *
+ * **Deleted issues that were already completed.** The walk above reads OPEN
+ * issues, so a `done` row is a sweep candidate on every backfill, and probing
+ * all of them forever would be a re-verification of the workspace on a
+ * schedule nobody asked for. So candidates stay open-only, which means a
+ * deleted issue that was already `done` keeps its row. That row is invisible
+ * by default: the panel's baseline is open work, and search excludes completed
+ * too. It becomes visible only with "Include done and cancelled" ticked, and
+ * `bb linear forget` clears it.
+ *
+ * Raising that floor is a cost decision, not a bug fix: probe completed rows
+ * too, on every backfill, or only on an explicit `--full`.
+ */

@@ -439,3 +439,23 @@ checklist maintained in `docs/smoke.md` from M2 on.
   the argv parser keeps one value per flag name. Beat: `--label a --label b`
   silently keeping only `b`, which is the failure mode a migration of
   several-hundred tasks would not notice until the labels were gone.
+
+## 2026-09-27 — a deleted issue is not a missing issue
+
+- The deletion sweep could not see a delete. Its existence probe runs with
+  `includeArchived: true`, which is right for archived issues (reversible, still
+  real) but which Linear also returns for **trashed** issues, with `archivedAt`
+  set. The sweep tested for absence, so every deletion read as "alive" and the
+  mirror row survived forever. The probe now selects `Issue.trashed` and keys
+  on that. Found in the wild: 26 deleted issues listed in the panel, and a
+  `sync --full` did not clear them.
+- Verified against the live workspace rather than asserted: live, archived and
+  trashed issues were probed through all four combinations of the two filters
+  before the fix was designed. Archived and trashed are **indistinguishable**
+  by presence alone, which is why the first attempt, a second probe with
+  `includeArchived: false`, was wrong and its own test disproved it.
+- Beat: reconciling deletions at all, which is why 26 ghosts survived. The
+  remaining known gap is stated in the code: a deleted issue that was already
+  `done` is not a candidate, because every done row would be one on every
+  backfill. Those rows are invisible by default. Widening it is a cost
+  decision for the owner.

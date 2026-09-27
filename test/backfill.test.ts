@@ -141,6 +141,10 @@ function fakeClient(overrides: Partial<LinearClient> = {}): LinearClient {
     tick: vi.fn(),
     notifications: vi.fn(),
     breadth: vi.fn(),
+    // Both existence probes, answering "gone" the way Linear does: with
+    // `includeArchived: true` a deleted issue is still returned, with
+    // `trashed: true` set, which is the whole reason that field is selected.
+    issuesExist: vi.fn(async () => ({ issues: { nodes: [] } })),
     createIssue: vi.fn(),
     createRelation: vi.fn(),
     linkUrl: vi.fn(),
@@ -474,6 +478,58 @@ describe("the deletion sweep", () => {
 
     expect(report.removed).toBe(0);
     expect(store.issue("gone")).not.toBeNull();
+  });
+
+  it("deletes an issue that was TRASHED in Linear, which is not absent from the probe", async () => {
+    // The bug this keys on. With `includeArchived: true` Linear still returns
+    // a deleted issue, with archivedAt set, exactly as it returns an archived
+    // one — so a sweep checking only for absence read every deletion as
+    // "alive". Found in the wild: 26 deleted issues listed in the panel, to
+    // the reader and to every agent tool, and a full sync did not clear them.
+    const store = createTestStore();
+    store.putTeams([team("t_0", "ENG")], NOW);
+    store.putIssues(
+      [toIssueInput(issueNode({ id: "kept" })), toIssueInput(issueNode({ id: "trashed" }))],
+      NOW,
+    );
+    const client = fakeClient({
+      backfillIssues: vi.fn(async () => ({
+        issues: { nodes: [issueNode({ id: "kept" })], pageInfo: { hasNextPage: false } },
+      })),
+      issuesExist: vi.fn(async () => ({
+        issues: { nodes: [{ id: "trashed", trashed: true }] },
+      })),
+    });
+
+    const report = await backfillTeams({ client, slot: "apiKey", store, now: () => NOW }, ["t_0"]);
+
+    expect(report.removed).toBe(1);
+    expect(store.issue("trashed")).toBeNull();
+  });
+
+  it("keeps an ARCHIVED issue, which the very same probe returns as present", async () => {
+    // The mirror of the test above, and the reason `trashed` rather than
+    // absence is the test. Archiving is reversible and an archived issue is
+    // still an issue, so it must survive.
+    const store = createTestStore();
+    store.putTeams([team("t_0", "ENG")], NOW);
+    store.putIssues(
+      [toIssueInput(issueNode({ id: "kept" })), toIssueInput(issueNode({ id: "archived" }))],
+      NOW,
+    );
+    const client = fakeClient({
+      backfillIssues: vi.fn(async () => ({
+        issues: { nodes: [issueNode({ id: "kept" })], pageInfo: { hasNextPage: false } },
+      })),
+      issuesExist: vi.fn(async () => ({
+        issues: { nodes: [{ id: "archived", trashed: null }] },
+      })),
+    });
+
+    const report = await backfillTeams({ client, slot: "apiKey", store, now: () => NOW }, ["t_0"]);
+
+    expect(report.removed).toBe(0);
+    expect(store.issue("archived")).not.toBeNull();
   });
 
   it("never sweeps after a truncated walk", async () => {

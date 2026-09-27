@@ -143,11 +143,17 @@ export interface LinearClient {
   ): Promise<IssuesResult>;
 
   /** Which of these issue ids does Linear still have? A liveness probe for
-   *  the reconcile: it tells a closed issue apart from a deleted one. */
+   *  the reconcile: it tells a closed issue apart from a deleted one.
+   *
+   *  `trashed` is the field that answers it. An id filter with
+   *  `includeArchived: true` still returns deleted issues, so a node without
+   *  it cannot tell an archived issue from a trashed one. */
   issuesExist(
     ids: readonly string[],
     options?: CallOptions,
-  ): Promise<{ issues: { nodes: readonly { id: string }[] } }>;
+  ): Promise<{
+    issues: { nodes: readonly { id: string; trashed?: boolean | null }[] };
+  }>;
 
   /** One issue with everything the detail pane and a spawned thread need.
    *  Deliberately the same document for both, so the spawn path — the one
@@ -333,10 +339,9 @@ export const createLinearClient: LinearClientFactory = (session, options) => {
       ),
 
     issuesExist: (ids, callOptions) =>
-      transport.execute<{ issues: { nodes: readonly { id: string }[] } }>(
-        ISSUES_EXIST,
-        call(callOptions, { ids: [...ids], first: EXISTENCE_PAGE_SIZE }),
-      ),
+      transport.execute<{
+        issues: { nodes: readonly { id: string; trashed?: boolean | null }[] };
+      }>(ISSUES_EXIST, call(callOptions, { ids: [...ids], first: EXISTENCE_PAGE_SIZE })),
 
     issueDetail: (id, callOptions) =>
       transport.execute<IssueDetailResult>(
