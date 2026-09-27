@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { useIsCompactViewport } from "@/components/ui/hooks/use-compact-viewport";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -49,6 +50,7 @@ export function LinearPanelHeader() {
   const state = usePanelChrome();
   const isCompact = useIsCompactViewport();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const loads = loadsForSegment(state.segment);
 
@@ -67,6 +69,29 @@ export function LinearPanelHeader() {
     if (loads.facets) facets.reload();
   }, [bindings.reload, facets.reload, loads.facets]);
   useRealtime("linear:structure", reloadStructure);
+
+  /**
+   * Sync now, and say what it did.
+   *
+   * The answer is a toast rather than inline text because the header is
+   * rendered by the host in a different React tree from the panel body, so
+   * there is nowhere local to put a sentence that would not be clipped by the
+   * title bar's height. The result reports deletions as well as reads: the
+   * thing a stale list gets wrong is invisible, so a sync that only ever said
+   * "read 40 issues" could not be told apart from one that found something to
+   * take away.
+   */
+  const syncNow = useCallback(() => {
+    setSyncing(true);
+    void rpc
+      .call("syncNow", null)
+      .then((result) => {
+        if (result.ok) toast.success(result.message);
+        else toast.error(result.message);
+      })
+      .catch(() => toast.error("Couldn't sync."))
+      .finally(() => setSyncing(false));
+  }, [rpc]);
 
   useEffect(() => {
     if (searchOpen) searchRef.current?.focus();
@@ -143,6 +168,24 @@ export function LinearPanelHeader() {
             className="h-7 w-40 pl-7 text-xs md:w-56"
           />
         </div>
+      ) : null}
+
+      {loads.panel ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          aria-label="Sync now"
+          aria-busy={syncing}
+          disabled={syncing}
+          onClick={syncNow}
+        >
+          <Icon
+            name="ArrowReloadHorizontal"
+            className={`size-4${syncing ? " animate-spin" : ""}`}
+            aria-hidden
+          />
+        </Button>
       ) : null}
 
       {loads.panel ? <DropdownMenu>

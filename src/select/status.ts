@@ -268,3 +268,32 @@ export function renderDoctor(checks: readonly DoctorCheck[]): string {
 
   return `Linear · ${verdict}\n${body}\n${fixes.length === 0 ? "" : `\n${fixes.join("\n\n")}\n`}`;
 }
+
+/**
+ * What a manual sync did, in one sentence.
+ *
+ * **It reports what it read, not what changed.** `putIssues` counts only rows
+ * whose `updatedAt` moved, so a resync of an unchanged workspace returns zero.
+ * "Read 0 issues" would tell somebody whose team has fifty that they have
+ * none, which is the worst thing this button can say. `read` is the number the
+ * walk actually looked at, and it is the number the question behind the button
+ * is about: is what I am looking at true.
+ *
+ * **Deletions are named separately**, for the same reason as above. A sync
+ * that only ever reported how much it read cannot be told apart from one that
+ * found stale rows and took them away, and stale rows are the failure the
+ * person pressed the button to fix.
+ */
+export function syncSummary(report: {
+  readonly read: number;
+  readonly issues: number;
+  readonly removed: number;
+}): string {
+  const checked = `Checked ${String(report.read)} ${pluralize(report.read, "issue", "issues")}.`;
+  if (report.removed === 0) return checked;
+  return `${checked} Removed ${String(report.removed)} that ${pluralize(
+    report.removed,
+    "no longer exists",
+    "no longer exist",
+  )} in Linear.`;
+}

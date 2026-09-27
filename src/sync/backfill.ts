@@ -30,7 +30,13 @@ export const EXISTENCE_SWEEP_LIMIT = 200;
 
 export interface BackfillReport {
   readonly teams: number;
+  /** Rows whose content actually moved. **Not** how many the walk read: a
+   *  resync of an unchanged workspace writes nothing and would report zero,
+   *  which reads as "this team has no issues" rather than "nothing moved". */
   readonly issues: number;
+  /** How many issues the walk actually read, changed or not. This is the
+   *  number a person pressing "Sync now" wants. */
+  readonly read: number;
   /** Issues deleted locally because Linear no longer has them. */
   readonly removed: number;
   readonly truncated: boolean;
@@ -140,7 +146,14 @@ export async function backfillTeams(
   teamIds: readonly string[],
 ): Promise<BackfillReport> {
   if (teamIds.length === 0) {
-    return { teams: 0, issues: 0, removed: 0, truncated: false, moreAvailable: false };
+    return {
+      teams: 0,
+      issues: 0,
+      read: 0,
+      removed: 0,
+      truncated: false,
+      moreAvailable: false,
+    };
   }
 
   await refreshTeamVocabulary(deps, teamIds);
@@ -187,7 +200,14 @@ export async function backfillTeams(
 
   const removed = truncated ? 0 : await sweepDeleted(deps, teamIds, seen);
 
-  return { teams: teamIds.length, issues, removed, truncated, moreAvailable: truncated };
+  return {
+    teams: teamIds.length,
+    issues,
+    read: seen.size,
+    removed,
+    truncated,
+    moreAvailable: truncated,
+  };
 }
 
 /**

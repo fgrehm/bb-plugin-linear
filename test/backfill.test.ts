@@ -354,6 +354,7 @@ describe("backfillTeams", () => {
     expect(report).toEqual({
       teams: 0,
       issues: 0,
+      read: 0,
       removed: 0,
       truncated: false,
       moreAvailable: false,
@@ -573,3 +574,34 @@ describe("the deletion sweep", () => {
     expect(store.issue("gone")).not.toBeNull();
   });
 })
+
+describe("the backfill report says what it read", () => {
+  it("counts issues the walk saw, not only the ones whose content moved", async () => {
+    // `putIssues` returns rows whose updatedAt changed, which is zero for a
+    // resync of an unchanged workspace. A "Sync now" button reporting that
+    // would tell somebody whose team has fifty that they have none.
+    const store = createTestStore();
+    store.putTeams([team("t_0", "ENG")], NOW);
+    store.putIssues(
+      [toIssueInput(issueNode({ id: "a" })), toIssueInput(issueNode({ id: "b" }))],
+      NOW,
+    );
+    // The walk sees the same two issues again, unchanged.
+    const client = fakeClient({
+      backfillIssues: vi.fn(async () => ({
+        issues: {
+          nodes: [issueNode({ id: "a" }), issueNode({ id: "b" })],
+          pageInfo: { hasNextPage: false },
+        },
+      })),
+      issuesExist: vi.fn(async () => ({
+        issues: { nodes: [{ id: "a" }, { id: "b" }] },
+      })),
+    });
+
+    const report = await backfillTeams({ client, slot: "apiKey", store, now: () => NOW }, ["t_0"]);
+
+    expect(report.read).toBe(2);
+    expect(report.removed).toBe(0);
+  });
+});

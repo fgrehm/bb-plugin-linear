@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   renderStatus,
+  syncSummary,
   type StatusReport,
   type WorkspaceStatusLine,
 } from "../src/select/status.js";
@@ -141,5 +142,38 @@ describe("renderStatus with several workspaces", () => {
     expect(text).toContain("Caffeinated Code (caffeinatedcode)");
     expect(text).toContain("Vedran");
     expect(text).toContain("778 issues, 6 projects cached");
+  });
+});
+
+describe("syncSummary", () => {
+  it("reports what it checked, not what moved", () => {
+    // `putIssues` counts only rows whose updatedAt moved, so a resync of an
+    // unchanged workspace returns zero. Reporting that would tell somebody
+    // whose team has fifty that they have none.
+    expect(syncSummary({ read: 50, issues: 0, removed: 0 })).toBe("Checked 50 issues.");
+  });
+
+  it("agrees with itself about one issue", () => {
+    expect(syncSummary({ read: 1, issues: 1, removed: 1 })).toBe(
+      "Checked 1 issue. Removed 1 that no longer exists in Linear.",
+    );
+  });
+
+  it("says what it read when nothing was stale", () => {
+    expect(syncSummary({ read: 12, issues: 3, removed: 0 })).toBe("Checked 12 issues.");
+  });
+
+  it("names the deletions separately from the reads", () => {
+    // The whole reason this is a function. A sync that only ever reported
+    // what it read cannot be told apart from one that quietly removed stale
+    // rows, and the stale rows are what the person pressed the button to fix.
+    expect(syncSummary({ read: 40, issues: 12, removed: 3 })).toBe(
+      "Checked 40 issues. Removed 3 that no longer exist in Linear.",
+    );
+  });
+
+  it("says nothing was removed when there was nothing to remove", () => {
+    // "Removed 0" reads as a failure to somebody waiting on a stale list.
+    expect(syncSummary({ read: 0, issues: 0, removed: 0 })).toBe("Checked 0 issues.");
   });
 });

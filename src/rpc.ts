@@ -196,6 +196,9 @@ export const serverRpcContract = defineRpcContract({
   createTargets: legacyContract.createTargets,
   createIssue: legacyContract.createIssue,
   startThread: legacyContract.startThread,
+  /** Wired to a real handler for the first time. The schema has been here
+   *  since the button was designed; nothing called it. */
+  syncNow: legacyContract.syncNow,
   inbox: legacyContract.inbox,
   inboxSummary: legacyContract.inboxSummary,
   dismissInbox: legacyContract.dismissInbox,

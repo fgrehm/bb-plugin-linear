@@ -493,3 +493,26 @@ checklist maintained in `docs/smoke.md` from M2 on.
   than a hiding one.
 - A label id with no row in the mirror is dropped rather than drawn blank: a
   label deleted in Linear leaves its id on rows that were not re-fetched.
+
+## 2026-09-27 — a Sync now button that is actually wired
+
+- The panel header gained a sync control next to the sort/filter menu, wired to
+  the `syncNow` RPC. That schema has existed since the button was designed and
+  **nothing had ever implemented it or rendered it** — the contract comment
+  described a button that did not exist.
+- It is a **forced** walk, not a delta, and that is the whole reason to have a
+  button rather than lean on the poller. A delta only fetches rows whose
+  `updatedAt` passed the watermark, so an issue deleted in Linear with an old
+  timestamp is never looked at again, and the deletion sweep only runs on a
+  complete walk.
+- The sentence reports **what it read**, not what changed. `putIssues` returns
+  only rows whose `updatedAt` moved, so a resync of an unchanged workspace
+  returns zero: the first live run of this button said "Read 0 issues" to a team
+  with fifty, which is the worst sentence the control can produce. Caught by
+  running it rather than trusting the unit tests.
+- Deletions are named separately from reads, since a sync that only reports
+  volume cannot be told apart from one that quietly cleaned up, and the stale
+  rows are what the person pressed the button to fix.
+- The result is a toast, not inline text: the header renders in the host's
+  title bar, a different React tree from the panel body, so there is nowhere
+  local for a sentence that would not be clipped.

@@ -114,6 +114,7 @@ import {
   connectedState,
   describeConnection,
 } from "./src/select/connection.js";
+import { syncSummary } from "./src/select/status.js";
 import type {
   DoctorCheck,
   StatusReport,
@@ -711,11 +712,15 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
 
     let backfilling: Promise<void> | null = null;
 
-    async function backfillBoundTeams(force: boolean): Promise<{ issues: number }> {
+    async function backfillBoundTeams(force: boolean): Promise<{
+      issues: number;
+      read: number;
+      removed: number;
+    }> {
       const values = await settings.get();
       const bound = store.boundTeamIds();
       const teamIds = expandTeams(bound, store.teams(), values.includeSubTeams);
-      if (teamIds.length === 0) return { issues: 0 };
+      if (teamIds.length === 0) return { issues: 0, read: 0, removed: 0 };
 
       const pending = force
         ? teamIds
@@ -729,7 +734,7 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
           )
             .filter((entry) => entry.done === undefined)
             .map((entry) => entry.teamId);
-      if (pending.length === 0) return { issues: 0 };
+      if (pending.length === 0) return { issues: 0, read: 0, removed: 0 };
 
       // One backfill per workspace. Teams from different workspaces cannot
       // share a request, but their independent transports can make progress
@@ -746,8 +751,10 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
         }),
       );
       const issues = reports.reduce((sum, report) => sum + report.issues, 0);
+      const removed = reports.reduce((sum, report) => sum + report.removed, 0);
+      const read = reports.reduce((sum, report) => sum + report.read, 0);
       publishStructure();
-      return { issues };
+      return { issues, read, removed };
     }
 
     /**
@@ -772,7 +779,11 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
     }
 
     /** Serialised the same way, and for the same reason. */
-    function backfillOnce(force: boolean): Promise<{ issues: number }> {
+    function backfillOnce(force: boolean): Promise<{
+      issues: number;
+      read: number;
+      removed: number;
+    }> {
       // Join an in-flight run rather than starting a second — but ONLY while
       // one is actually in flight. The guard used to be set and never
       // cleared, which made every later non-forced backfill a silent no-op:
@@ -781,7 +792,7 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
       // door has always had the `finally` reset; this one was missed.
       if (backfilling !== null) {
         const joined = backfilling;
-        if (!force) return joined.then(() => ({ issues: 0 }));
+        if (!force) return joined.then(() => ({ issues: 0, read: 0, removed: 0 }));
         // A forced run waits for the in-flight one instead of racing it:
         // two concurrent 5-page walks over the same teams spend double the
         // budget and interleave their kv writes.
@@ -4086,6 +4097,39 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
             message: describeError(error),
             note: null,
           };
+        }
+      },
+
+      /**
+       * The panel's **Sync now** button.
+       *
+       * It awaits the walk, unlike the CLI's `sync`, because a button has a
+       * user standing in front of it expecting a sentence. The CLI cannot: a
+       * backfill is up to six requests and does not fit its two-second budget,
+       * so that one starts and returns.
+       *
+       * **Forced, not a delta.** A plain delta only fetches rows whose
+       * `updatedAt` moved past the watermark, so an issue deleted in Linear
+       * with an old timestamp is never looked at again and its row survives
+       * in the panel forever. A person pressing this button is asking "is what
+       * I am looking at true", and the deletion sweep only runs on a complete
+       * walk. It is also why the count reports `removed`: the thing a stale
+       * panel gets wrong is invisible, so a sync that only ever says "read N"
+       * cannot be told apart from one that found something to take away.
+       */
+      syncNow: async () => {
+        if (store.boundTeamIds().length === 0) {
+          return {
+            ok: false,
+            message: "No Linear team is bound here. Run: bb linear bind <TEAM-KEY>",
+          };
+        }
+        try {
+          const report = await backfillOnce(true);
+          publish("linear:data");
+          return { ok: true, message: syncSummary(report) };
+        } catch (error) {
+          return { ok: false, message: describeError(error) };
         }
       },
 
