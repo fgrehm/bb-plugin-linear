@@ -252,11 +252,26 @@ export const panelFiltersSchema = z.object({
   stateTypes: z.array(z.string()).default([]),
   assigneeIds: z.array(z.string()).default([]),
   labelIds: z.array(z.string()).default([]),
+  /** Linear project ids. `NO_PROJECT` stands for "no project at all", which is
+   *  a real bucket in every workspace and has no id to name it by. */
+  projectIds: z.array(z.string()).default([]),
   priorities: z.array(z.number()).default([]),
   /** Off by default: the panel's baseline is open work. */
   includeCompleted: z.boolean().default(false),
 });
 export type PanelFilters = z.infer<typeof panelFiltersSchema>;
+
+/**
+ * The "No project" entry in the project filter, as a value in `projectIds`.
+ *
+ * A sentinel rather than a second boolean because the filter reads as one
+ * choice: "BB or pAIr00t" and "pAIr00t or unfiled" are both selections from
+ * one list, and a second control next to it is a question the user has to
+ * read twice.
+ *
+ * Safe because a Linear id is a UUID. This is not one.
+ */
+export const NO_PROJECT = "\u0000no-project";
 
 export const panelQuerySchema = z.object({
   /**
@@ -281,6 +296,7 @@ export const panelQuerySchema = z.object({
     stateTypes: [],
     assigneeIds: [],
     labelIds: [],
+    projectIds: [],
     priorities: [],
     includeCompleted: false,
   }),
@@ -722,6 +738,10 @@ export const facetsSchema = z.object({
   labels: z.array(
     z.object({ id: z.string(), name: z.string(), color: z.string().nullable() }),
   ),
+  /** The bound teams' own projects, so the project filter lists what this
+   *  workspace actually has rather than a hardcoded pair. Empty for a team
+   *  whose work is not in any project, which is most teams. */
+  projects: z.array(z.object({ id: z.string(), name: z.string() })),
   members: z.array(assigneeViewSchema.extend({ isMe: z.boolean() })),
   priorities: z.array(z.object({ priority: z.number(), label: z.string() })),
 });

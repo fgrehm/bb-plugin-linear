@@ -459,3 +459,20 @@ checklist maintained in `docs/smoke.md` from M2 on.
   `done` is not a candidate, because every done row would be one on every
   backfill. Those rows are invisible by default. Widening it is a cost
   decision for the owner.
+
+## 2026-09-27 — filter by project, including "no project"
+
+- The panel gained a **Project** filter beside the existing ones, listing the
+  bound teams' own projects. Grouping by project already existed and was never
+  missing; filtering by it did not, and with two projects on one team it is the
+  filter that matters.
+- **"No project" is a first-class entry.** It arrives as a sentinel
+  (`NO_PROJECT`) inside `projectIds` rather than a second boolean, because
+  "BB or unfiled" is one choice from one list and a second control next to it
+  is a question read twice. The store unwraps it into `project_id IS NULL` and
+  never lets it reach the `IN` list, where it would be a clause matching
+  nothing and would drop the unfiled rows out of a union.
+- Facets carry `projects` and the section is hidden when the list is empty, so a
+  team whose work is in no project gets no control rather than an empty one.
+  Beat: a hardcoded pair of projects, which is a control that lists things this
+  workspace does not have and hides the one it does.

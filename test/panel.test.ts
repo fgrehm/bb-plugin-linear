@@ -17,7 +17,7 @@ import {
 import { estimateLabel, estimateScale } from "../src/select/detail.js";
 import { priorityMark, toneForStateType } from "../src/select/tone.js";
 import { glyphsForStates } from "../src/select/glyph.js";
-import type { PanelFilters } from "../src/contract.js";
+import { NO_PROJECT, type PanelFilters } from "../src/contract.js";
 import type { IssueRow, MemberRow, WorkflowStateRow } from "../src/store/rows.js";
 import { createTestStore, issue, member, NOW, state, team } from "./helpers/store.js";
 
@@ -28,6 +28,7 @@ const NO_FILTERS: PanelFilters = {
   stateTypes: [],
   assigneeIds: [],
   labelIds: [],
+  projectIds: [],
   priorities: [],
   includeCompleted: false,
 };
@@ -515,6 +516,61 @@ describe("buildFacets", () => {
     expect(facets.stateTypes.some((entry) => entry.type === "triage")).toBe(false);
     // The state list keeps the team's own names.
     expect(facets.states.map((entry) => entry.name)).toEqual(["Todo", "Building"]);
+  });
+
+  it("offers the bound teams' own projects, and nothing for a team without any", () => {
+    // The project filter has to list what this workspace has, not a fixed
+    // pair. A team whose work is in no project gets no section at all rather
+    // than a control with nothing in it.
+    const store = createTestStore();
+    store.putTeams([team("team_eng", "ENG")], NOW);
+    store.putProjects(
+      [
+        { id: "p_bb", name: "BB", description: null, url: null, statusId: null, leadId: null, startDate: null, targetDate: null, progress: null, updatedAt: NOW },
+        { id: "p_root", name: "pAIr00t", description: null, url: null, statusId: null, leadId: null, startDate: null, targetDate: null, progress: null, updatedAt: NOW },
+      ],
+      [
+        { projectId: "p_bb", teamId: "team_eng" },
+        { projectId: "p_root", teamId: "team_eng" },
+      ],
+    );
+    const withProjects = buildFacets(
+      {
+        store,
+        now: () => NOW,
+        hasCredential: true,
+        boundTeamIds: ["team_eng"],
+        backfilledTeamIds: new Set(),
+        notice: null,
+      },
+      null,
+    );
+    expect(withProjects.projects).toEqual([
+      { id: "p_bb", name: "BB" },
+      { id: "p_root", name: "pAIr00t" },
+    ]);
+
+    const bare = createTestStore();
+    bare.putTeams([team("team_eng", "ENG")], NOW);
+    expect(
+      buildFacets(
+        {
+          store: bare,
+          now: () => NOW,
+          hasCredential: true,
+          boundTeamIds: ["team_eng"],
+          backfilledTeamIds: new Set(),
+          notice: null,
+        },
+        null,
+      ).projects,
+    ).toEqual([]);
+  });
+
+  it("keeps the no-project sentinel out of reach of a real project id", () => {
+    // A Linear id is a UUID, and the sentinel is not one. This is the whole
+    // reason a single string can carry both a project and "no project".
+    expect(NO_PROJECT).not.toMatch(/^[0-9a-f-]{36}$/i);
   });
 });
 

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Grouping, Sort } from "../src/contract.js";
+import { NO_PROJECT } from "../src/contract.js";
 import {
   chrome,
   hasActiveFilters,
@@ -205,6 +206,34 @@ export function LinearPanelHeader() {
                   {entry.label}
                 </DropdownMenuCheckboxItem>
               ))}
+            </>
+          ) : null}
+
+          {/*
+            Projects, from the bound teams' own rows, so the list is whatever
+            this workspace has: two, one, or a dozen. The "No project" entry is
+            always last, because an issue in no project is the bucket people
+            forget they have, not one of the projects.
+          */}
+          {facets.status === "ready" && facets.value.projects.length > 0 ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Project</DropdownMenuLabel>
+              {facets.value.projects.map((entry) => (
+                <DropdownMenuCheckboxItem
+                  key={entry.id}
+                  checked={state.filters.projectIds.includes(entry.id)}
+                  onCheckedChange={() => chrome.toggleFacet("projectIds", entry.id)}
+                >
+                  {entry.name}
+                </DropdownMenuCheckboxItem>
+              ))}
+              <DropdownMenuCheckboxItem
+                checked={state.filters.projectIds.includes(NO_PROJECT)}
+                onCheckedChange={() => chrome.toggleFacet("projectIds", NO_PROJECT)}
+              >
+                No project
+              </DropdownMenuCheckboxItem>
             </>
           ) : null}
 

@@ -42,10 +42,15 @@ One team can carry several projects. `bb linear create --project <name>` and
 start, and `linear_project_list` prints each project's id, because a name is
 not something a write accepts.
 
-Group by state, assignee, project or cycle. Sort by activity, priority, due
-date, age, or Linear's own manual order. The filter facets are **derived from
-your team's actual workflow** — a triage-enabled team gets a Triage chip, a
-team without one never sees it.
+Group by state, assignee, project or cycle, and **filter by project** in the
+same menu — a "Project" list built from the bound teams' own projects, with a
+"No project" entry for the rows in none of them. That last one matters more
+than it sounds: it is the bucket people forget they have, and it is the only
+place an unfiled issue is visible. Sort by activity, priority, due date, age,
+or Linear's own manual order. The filter facets are **derived from your team's
+actual workflow** — a triage-enabled team gets a Triage chip, a team without
+one never sees it, and a team whose work is in no project gets no Project
+section rather than an empty one.
 
 <p align="center">
   <img src="./assets/readme/filters.png" alt="Grouping, sorting, and facets derived from the team's own workflow" width="620">

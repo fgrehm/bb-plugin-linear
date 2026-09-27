@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toMatchQuery } from "../src/store/store.js";
+import { NO_PROJECT } from "../src/contract.js";
 import { createTestStore, issue, member, NOW, state, team } from "./helpers/store.js";
 
 describe("the migration list", () => {
@@ -850,5 +851,92 @@ describe("forgetEverything", () => {
     ).toEqual([]);
     // And the schema still stands, so the plugin keeps working afterwards.
     expect(() => store.putIssues([issue({ id: "2" })], NOW)).not.toThrow();
+  });
+});
+
+describe("the project filter", () => {
+  function storeWithThreeProjects() {
+    const store = createTestStore();
+    store.putIssues(
+      [
+        issue({ id: "bb", projectId: "p_bb" }),
+        issue({ id: "root", projectId: "p_root" }),
+        issue({ id: "unfiled", projectId: null }),
+      ],
+      NOW,
+    );
+    return store;
+  }
+
+  const ids = (rows: readonly { id: string }[]) => rows.map((row) => row.id).sort();
+
+  it("narrows to one project", () => {
+    // The case a single team with several projects needs: BB and pAIr00t's work
+    // share one list, and the question is which board a row is on.
+    expect(
+      ids(
+        storeWithThreeProjects().queryIssues({
+          teamIds: ["team_eng"],
+          projectIds: ["p_root"],
+          sort: "updated",
+          limit: 10,
+        }),
+      ),
+    ).toEqual(["root"]);
+  });
+
+  it("unions several projects", () => {
+    expect(
+      ids(
+        storeWithThreeProjects().queryIssues({
+          teamIds: ["team_eng"],
+          projectIds: ["p_bb", "p_root"],
+          sort: "updated",
+          limit: 10,
+        }),
+      ),
+    ).toEqual(["bb", "root"]);
+  });
+
+  it("resolves the no-project sentinel to the unfiled rows", () => {
+    // "In no project" is a real bucket with no id to name it by, and it is the
+    // bucket people forget they have.
+    expect(
+      ids(
+        storeWithThreeProjects().queryIssues({
+          teamIds: ["team_eng"],
+          projectIds: [NO_PROJECT],
+          sort: "updated",
+          limit: 10,
+        }),
+      ),
+    ).toEqual(["unfiled"]);
+  });
+
+  it("unions the sentinel with real project ids in one selection", () => {
+    // "BB or unfiled" is a single choice in the UI, so it has to be one
+    // selection in the query rather than two controls read together.
+    expect(
+      ids(
+        storeWithThreeProjects().queryIssues({
+          teamIds: ["team_eng"],
+          projectIds: ["p_bb", NO_PROJECT],
+          sort: "updated",
+          limit: 10,
+        }),
+      ),
+    ).toEqual(["bb", "unfiled"]);
+  });
+
+  it("never matches a row against the sentinel itself", () => {
+    // The sentinel is not an id. If it leaked into the IN list it would be a
+    // clause matching nothing, and an unfiled row would drop out of a union.
+    const rows = storeWithThreeProjects().queryIssues({
+      teamIds: ["team_eng"],
+      projectIds: [NO_PROJECT, "p_root"],
+      sort: "updated",
+      limit: 10,
+    });
+    expect(rows.some((row) => row.projectId === NO_PROJECT)).toBe(false);
   });
 });

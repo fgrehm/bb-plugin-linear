@@ -119,6 +119,7 @@ export function buildPanelView(deps: PanelDeps, query: PanelQuery): PanelView {
     stateTypes: query.filters.stateTypes,
     assigneeIds: query.filters.assigneeIds,
     labelIds: query.filters.labelIds,
+    projectIds: query.filters.projectIds,
     priorities: query.filters.priorities,
     includeCompleted: query.filters.includeCompleted,
     text: query.search,
@@ -569,6 +570,13 @@ export function buildFacets(deps: PanelDeps, team: string | null): Facets {
       id: label.id,
       name: label.name,
       color: label.color,
+    })),
+    // Projects, so the project filter lists what this workspace actually has.
+    // A team whose work is not in any project gets an empty list and no
+    // section, rather than a control with nothing in it.
+    projects: deps.store.projects(teamIds).map((project) => ({
+      id: project.id,
+      name: project.name,
     })),
     members: deps.store.assignableMembers(teamIds).map((member) => ({
       id: member.id,

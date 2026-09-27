@@ -1,4 +1,5 @@
 import { createThreadWorkStore, type ThreadWorkStore } from "./thread-work.js";
+import { NO_PROJECT } from "../contract.js";
 import type { Database } from "better-sqlite3";
 import { MIGRATIONS } from "./migrations.js";
 import type {
@@ -155,6 +156,8 @@ export interface IssueFilter {
   readonly stateIds?: readonly string[];
   readonly stateTypes?: readonly string[];
   readonly assigneeIds?: readonly string[];
+  /** Linear project ids. `NO_PROJECT` (from the contract) selects the
+   *  unfiled bucket, which is a real bucket and has no id to name it by. */
   readonly projectIds?: readonly string[];
   readonly cycleIds?: readonly string[];
   readonly labelIds?: readonly string[];
@@ -558,7 +561,22 @@ export function createStore(db: Database): Store {
     inClause("issue.state_id", filter.stateIds);
     inClause("state.type", filter.stateTypes);
     inClause("issue.assignee_id", filter.assigneeIds);
-    inClause("issue.project_id", filter.projectIds);
+
+    // The project filter carries its "no project" choice as a sentinel in the
+    // same list, so it is unwrapped here rather than in every caller. An id
+    // that does not exist and an issue in no project are different questions
+    // with the same answer in the UI, and OR is exactly that.
+    if (filter.projectIds !== undefined && filter.projectIds.length > 0) {
+      const unfiled = filter.projectIds.includes(NO_PROJECT);
+      const ids = filter.projectIds.filter((id) => id !== NO_PROJECT);
+      const parts: string[] = [];
+      if (ids.length > 0) {
+        parts.push(`issue.project_id IN (${placeholders(ids.length)})`);
+        params.push(...ids);
+      }
+      if (unfiled) parts.push("issue.project_id IS NULL");
+      if (parts.length > 0) clauses.push(`(${parts.join(" OR ")})`);
+    }
     inClause("issue.cycle_id", filter.cycleIds);
 
     if (filter.priorities !== undefined && filter.priorities.length > 0) {
