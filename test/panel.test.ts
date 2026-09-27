@@ -567,6 +567,38 @@ describe("buildFacets", () => {
     ).toEqual([]);
   });
 
+  it("counts the unfiled issues so a dead 'No project' entry can be hidden", () => {
+    // A filter entry that can only ever return an empty list is a control that
+    // lies about there being something to find. So the count is real data, and
+    // it excludes completed work, because the menu's baseline is open work.
+    const store = createTestStore();
+    store.putTeams([team("team_eng", "ENG")], NOW);
+    store.replaceWorkflowStates("team_eng", [
+      state("s_todo", "team_eng", "unstarted"),
+      state("s_done", "team_eng", "completed"),
+    ]);
+    store.putIssues(
+      [
+        issue({ id: "in_project", projectId: "p_bb", stateId: "s_todo" }),
+        issue({ id: "unfiled_open", stateId: "s_todo" }),
+        issue({ id: "unfiled_done", stateId: "s_done" }),
+      ],
+      NOW,
+    );
+    const facets = buildFacets(
+      {
+        store,
+        now: () => NOW,
+        hasCredential: true,
+        boundTeamIds: ["team_eng"],
+        backfilledTeamIds: new Set(),
+        notice: null,
+      },
+      null,
+    );
+    expect(facets.unfiled).toBe(1);
+  });
+
   it("keeps the no-project sentinel out of reach of a real project id", () => {
     // A Linear id is a UUID, and the sentinel is not one. This is the whole
     // reason a single string can carry both a project and "no project".

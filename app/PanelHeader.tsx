@@ -211,9 +211,9 @@ export function LinearPanelHeader() {
 
           {/*
             Projects, from the bound teams' own rows, so the list is whatever
-            this workspace has: two, one, or a dozen. The "No project" entry is
-            always last, because an issue in no project is the bucket people
-            forget they have, not one of the projects.
+            this workspace has: two, one, or a dozen. "No project" is last, and
+            only when something is actually unfiled, because a filter entry
+            that can only return an empty list is a dead control.
           */}
           {facets.status === "ready" && facets.value.projects.length > 0 ? (
             <>
@@ -228,12 +228,14 @@ export function LinearPanelHeader() {
                   {entry.name}
                 </DropdownMenuCheckboxItem>
               ))}
-              <DropdownMenuCheckboxItem
-                checked={state.filters.projectIds.includes(NO_PROJECT)}
-                onCheckedChange={() => chrome.toggleFacet("projectIds", NO_PROJECT)}
-              >
-                No project
-              </DropdownMenuCheckboxItem>
+              {facets.value.unfiled > 0 ? (
+                <DropdownMenuCheckboxItem
+                  checked={state.filters.projectIds.includes(NO_PROJECT)}
+                  onCheckedChange={() => chrome.toggleFacet("projectIds", NO_PROJECT)}
+                >
+                  No project
+                </DropdownMenuCheckboxItem>
+              ) : null}
             </>
           ) : null}
 

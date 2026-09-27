@@ -5,6 +5,7 @@ import type {
   PanelView,
   WorkingSetView,
 } from "./contract.js";
+import { NO_PROJECT } from "./contract.js";
 import { todayAsTimelessDate } from "./format.js";
 import {
   selectPanelState,
@@ -578,6 +579,13 @@ export function buildFacets(deps: PanelDeps, team: string | null): Facets {
       id: project.id,
       name: project.name,
     })),
+    // The same filter the menu offers, run once, so "No project" can be
+    // hidden when it would return nothing rather than always shown.
+    unfiled: deps.store.countIssues({
+      teamIds,
+      projectIds: [NO_PROJECT],
+      includeCompleted: false,
+    }),
     members: deps.store.assignableMembers(teamIds).map((member) => ({
       id: member.id,
       name: member.displayName,

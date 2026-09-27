@@ -742,6 +742,10 @@ export const facetsSchema = z.object({
    *  workspace actually has rather than a hardcoded pair. Empty for a team
    *  whose work is not in any project, which is most teams. */
   projects: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** How many open issues belong to no project. "No project" is hidden when
+   *  this is zero, because a filter entry that can only ever return an empty
+   *  list is a control that lies about there being something to find. */
+  unfiled: z.number(),
   members: z.array(assigneeViewSchema.extend({ isMe: z.boolean() })),
   priorities: z.array(z.object({ priority: z.number(), label: z.string() })),
 });
