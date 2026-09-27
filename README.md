@@ -37,6 +37,11 @@ the sentence and the control agree.
 
 ## Group, sort, filter
 
+One team can carry several projects. `bb linear create --project <name>` and
+`linear_issue_create`'s `projectId` both put the issue in its project from the
+start, and `linear_project_list` prints each project's id, because a name is
+not something a write accepts.
+
 Group by state, assignee, project or cycle. Sort by activity, priority, due
 date, age, or Linear's own manual order. The filter facets are **derived from
 your team's actual workflow** — a triage-enabled team gets a Triage chip, a
@@ -224,6 +229,17 @@ bb linear attach | archive                links; reversible archive
 bb linear inbox | webhook | forget        inbox; webhooks; leave no trace
 bb linear start | link | unlink | work    threads, current and concurrent work
 ```
+
+`create` takes a project and labels as names, so a bulk migration does not need
+a create-then-patch per issue:
+
+```sh
+bb linear create "Screenshot sweep" --project BB --label marketplace,upstream
+```
+
+A name is resolved against the target team's own projects and labels. An
+ambiguous name is refused with the candidates listed rather than guessed, and
+`bb linear set <id> --project <name>` takes the same names.
 
 Every read answers from the local copy. Run any read with `--json` for
 machine output.

@@ -76,6 +76,7 @@ import {
 } from "./src/pane-write.js";
 import { registerMentionProviders } from "./src/mentions.js";
 import { issueNeedsRefresh, registerTools } from "./src/tools.js";
+import { resolveNamed } from "./src/named.js";
 import { fetchLinearImage, resolveImageAccess } from "./src/image-proxy.js";
 import type { TimelineVocabulary } from "./src/select/timeline.js";
 import { runPrTransition, type PrRunnerDeps } from "./src/automations/pr-runner.js";
@@ -4408,25 +4409,14 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
           if (args.project === "none") {
             patch["projectId"] = null;
           } else {
-            const matches = store
-              .projects([issue.teamId])
-              .filter((entry) => entry.name.toLowerCase().includes(args.project!.toLowerCase()));
-            const exact = matches.find(
-              (entry) => entry.name.toLowerCase() === args.project!.toLowerCase(),
+            const resolved = resolveNamed(
+              store.projects([issue.teamId]),
+              args.project,
+              target.team.name,
+              "project",
             );
-            const chosen = exact ?? (matches.length === 1 ? matches[0] : undefined);
-            if (chosen === undefined) {
-              return {
-                ok: false,
-                message:
-                  matches.length === 0
-                    ? `No project matching "${args.project}" on ${target.team.name}.`
-                    : `"${args.project}" matches ${String(matches.length)}: ${matches
-                        .map((entry) => entry.name)
-                        .join(", ")}.`,
-              };
-            }
-            patch["projectId"] = chosen.id;
+            if (!resolved.ok) return { ok: false, message: resolved.message };
+            patch["projectId"] = resolved.value.id;
           }
           changed.push("project");
         }
@@ -4506,9 +4496,9 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
         }
       },
 
-      create: async ({ title, description, team, assignee, priority, projectId: project }) => {
+      create: async ({ title, description, team, assignee, priority, project: projectName, labels, projectId: scopeProject }) => {
         const current = scopeFor(
-          project ?? (await defaultProjectId()) ?? "",
+          scopeProject ?? (await defaultProjectId()) ?? "",
           store.bindings(),
         );
         if (current.writeTeamIds.length === 0) {
@@ -4561,6 +4551,34 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
         }
 
         const viewer = store.viewer([target.id]);
+
+        // Names, never ids, and only ever this team's own projects and labels.
+        // A create that goes into a project somebody else cannot see is not a
+        // mistake the user can undo by editing the issue.
+        let projectId: string | undefined;
+        if (projectName !== undefined && projectName !== "none") {
+          const resolved = resolveNamed(
+            store.projects([target.id]),
+            projectName,
+            target.name,
+            "project",
+          );
+          if (!resolved.ok) return { ok: false, message: resolved.message };
+          projectId = resolved.value.id;
+        }
+
+        const labelIds: string[] = [];
+        for (const labelName of labels) {
+          const resolved = resolveNamed(
+            store.labels([target.id]),
+            labelName,
+            target.name,
+            "label",
+          );
+          if (!resolved.ok) return { ok: false, message: resolved.message };
+          if (!labelIds.includes(resolved.value.id)) labelIds.push(resolved.value.id);
+        }
+
         try {
           const issue = await createIssue(mutations, clientForTeam, {
             teamId: target.id,
@@ -4568,6 +4586,8 @@ export function createPlugin(makeClient: LinearClientFactory = createLinearClien
             ...(description === undefined ? {} : { description }),
             ...(assignee === "me" && viewer !== null ? { assigneeId: viewer.id } : {}),
             ...(priority === undefined ? {} : { priority }),
+            ...(projectId === undefined ? {} : { projectId }),
+            ...(labelIds.length === 0 ? {} : { labelIds }),
             clientId: clientId(),
           });
           return {

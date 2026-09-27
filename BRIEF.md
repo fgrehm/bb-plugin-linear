@@ -414,3 +414,28 @@ checklist maintained in `docs/smoke.md` from M2 on.
   no duplicate issue was available. Triage uses a solid ring and centred dot;
   this is unverified because no triage-enabled team was available. Verify both
   against Linear's DOM with a duplicate issue and a triage-enabled team.
+
+## 2026-09-26 — one team, several projects
+
+- A create can name its project and its labels: `bb linear create <title>
+  --project <name> --label a,b`, and `linear_issue_create` takes `projectId`.
+  Beat: create-then-patch, two writes per issue and a window in which a
+  migrated issue is in no project at all. A migration of BB Tasks into one
+  team's BB, BB Marketplace and BB Image projects needed this and could not do
+  it from the CLI at all.
+- `linear_project_list` prints each project's id beside its name. Beat: names
+  only, which left an agent with nothing it could pass to a write — a name is
+  not something `IssueCreateInput` accepts.
+- Name resolution is one shared rule (`src/named.ts`): an exact match wins, a
+  lone partial match is taken, and anything else is refused with the
+  candidates named. Beat: a prefix scan, which is what `set --project` did and
+  which turns "BB" into a coin flip between BB and BB Image.
+- `set` and `create` take their bb scope from the project the command ran in,
+  never from `--project`, which those two commands spend on a Linear project
+  name. Beat: reading the same flag twice, which scoped the write to a bb
+  project literally named after the Linear project and refused it as out of
+  scope — a message that reads as "this issue is not visible to you".
+- Labels on the CLI are a comma separated list, not a repeatable flag, because
+  the argv parser keeps one value per flag name. Beat: `--label a --label b`
+  silently keeping only `b`, which is the failure mode a migration of
+  several-hundred tasks would not notice until the labels were gone.

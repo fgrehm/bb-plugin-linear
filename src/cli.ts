@@ -1,6 +1,6 @@
 import { WORK_ACTIONS, type WorkAction } from "./store/thread-work.js";
 import type { PluginCliCommandInfo, PluginCliContext, PluginCliResult } from "@bb/plugin-sdk";
-import { flagBoolean, parseArgs, type ParsedArgs } from "./cli-args.js";
+import { flagBoolean, flagStrings, parseArgs, type ParsedArgs } from "./cli-args.js";
 import { fail, json, ok, table } from "./cli-format.js";
 import { describeError } from "./linear/errors.js";
 import { renderDoctor, renderStatus, type DoctorCheck, type StatusReport } from "./select/status.js";
@@ -80,6 +80,10 @@ export interface CliEnvironment {
     team: string | undefined;
     assignee: string | undefined;
     priority: number | undefined;
+    /** A **Linear** project name, resolved against the target team's projects. */
+    project: string | undefined;
+    /** Label names, resolved against the target team's labels. */
+    labels: readonly string[];
     projectId: string | undefined;
   }): Promise<{ ok: boolean; message: string }>;
   issues(args: {
@@ -185,7 +189,7 @@ export const CLI_COMMANDS: readonly PluginCliCommandInfo[] = [
     name: "create",
     summary: "Create an issue in the bound team",
     usage:
-      "bb linear create <title…> [--description <text>] [--team <KEY>] [--assignee me] [--priority 0-4]",
+      "bb linear create <title…> [--description <text>] [--team <KEY>] [--assignee me] [--priority 0-4] [--project <name>] [--label <name,…>]",
   },
   {
     name: "issues",
@@ -269,6 +273,7 @@ const USAGE = `bb linear — Linear issues, and the bb threads and pull requests
   bb linear sync [--full]       Read the bound teams' open issues now
 
   bb linear create <title…>     Create an issue in the bound team
+  bb linear create "…" --project BB --label marketplace   In a project, labelled
   bb linear issues              List the bound teams' issues, filtered
   bb linear issue <ENG-123>     Read one issue in full
   bb linear move <ENG-123> <s>  Move it to one of its team's states
@@ -321,6 +326,21 @@ function readLimit(value: string | undefined, fallback = 30): number {
  */
 function projectId(args: ParsedArgs, ctx: PluginCliContext): string | undefined {
   return flagString(args, "project") ?? ctx.projectId;
+}
+
+/**
+ * The bb project a command is scoped to, for commands where `--project` means
+ * something else.
+ *
+ * `set` and `create` take `--project <name>` as a **Linear** project name. If
+ * they also read that same flag as a bb project id, `bb linear set AGE-4
+ * --project BB` scopes the write to a bb project called "BB", which is not one,
+ * and the write is refused as out of scope. That is a refusal that reads as
+ * "this issue is not visible to me" when the issue is right there, so these
+ * commands take the scope from bb alone.
+ */
+function enclosingProjectId(ctx: PluginCliContext): string | undefined {
+  return ctx.projectId;
 }
 
 export function createCliRunner(env: CliEnvironment): CliRunner {
@@ -447,7 +467,9 @@ export function createCliRunner(env: CliEnvironment): CliRunner {
             team: flagString(args, "team"),
             assignee: flagString(args, "assignee"),
             priority: priority === undefined ? undefined : readPriority(priority),
-            projectId: projectId(args, ctx),
+            project: flagString(args, "project"),
+            labels: flagStrings(args, "label"),
+            projectId: enclosingProjectId(ctx),
           });
           return result.ok ? ok(`${result.message}\n`) : fail(`${result.message}\n`);
         }
@@ -554,7 +576,7 @@ export function createCliRunner(env: CliEnvironment): CliRunner {
             title: flagString(args, "title"),
             addLabel: flagString(args, "label"),
             removeLabel: flagString(args, "unlabel"),
-            projectId: projectId(args, ctx),
+            projectId: enclosingProjectId(ctx),
           });
           return result.ok ? ok(`${result.message}\n`) : fail(`${result.message}\n`);
         }

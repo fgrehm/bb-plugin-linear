@@ -383,6 +383,42 @@ describe("pane issue and relation mutations", () => {
     );
   });
 
+  it("passes a project and labels on create", async () => {
+    // A migration writes each issue straight into its project. Creating
+    // unprojected and patching afterwards is two writes per issue and leaves
+    // a window where the issue is in no project at all.
+    const d = deps({
+      createIssue: vi.fn(async () => ({ issueCreate: { success: true, issue: ISSUE } })),
+    });
+    await createIssue(d, () => d.client, {
+      teamId: "team_eng",
+      title: "Ship the plugin",
+      projectId: "p_bb",
+      labelIds: ["l_mkt", "l_upstream"],
+      clientId: "i_new",
+    });
+    expect(d.client.createIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "p_bb", labelIds: ["l_mkt", "l_upstream"] }),
+      expect.anything(),
+    );
+  });
+
+  it("omits projectId entirely when none was named", async () => {
+    // `null` on a create would ask Linear to clear a project that was never
+    // set, which is not the same request as not mentioning it.
+    const d = deps({
+      createIssue: vi.fn(async () => ({ issueCreate: { success: true, issue: ISSUE } })),
+    });
+    await createIssue(d, () => d.client, {
+      teamId: "team_eng",
+      title: "Plain issue",
+      clientId: "i_new",
+    });
+    const input = (d.client.createIssue as unknown as { mock: { calls: [Record<string, unknown>][] } })
+      .mock.calls[0]![0] as Record<string, unknown>;
+    expect(Object.keys(input)).not.toContain("projectId");
+  });
+
   it("deletes a mirrored relation after Linear accepts it", async () => {
     const d = deps();
     d.store.mergeRelations([

@@ -377,6 +377,9 @@ export async function createIssue(
     assigneeId?: string;
     priority?: number;
     parentId?: string;
+    /** Linear's `IssueCreateInput.projectId`. Omitted rather than `null`,
+     *  because a create has no prior project to clear. */
+    projectId?: string;
     labelIds?: readonly string[];
     clientId: string;
   },
@@ -395,6 +398,7 @@ export async function createIssue(
         ...(input.assigneeId === undefined ? {} : { assigneeId: input.assigneeId }),
         ...(input.priority === undefined ? {} : { priority: input.priority }),
         ...(input.parentId === undefined ? {} : { parentId: input.parentId }),
+        ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
         // The one place `labelIds` is correct: there is no prior set to
         // clobber on a create.
         ...(input.labelIds === undefined ? {} : { labelIds: [...input.labelIds] }),

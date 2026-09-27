@@ -80,6 +80,27 @@ export function flagString(args: ParsedArgs, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/**
+ * A flag that may carry several values, as one comma separated string:
+ * `--label marketplace,upstream`.
+ *
+ * The parser keeps one value per flag name, so a repeated `--label` would keep
+ * only the last one. A list that silently loses every value but the last is
+ * worse than a flag nobody can repeat, so the repetition is spelled with a
+ * comma, which is also how Linear's own filter syntax writes a list.
+ *
+ * Empty segments are dropped rather than becoming an empty match, so a
+ * trailing comma is a typo the user can see is not a label named "".
+ */
+export function flagStrings(args: ParsedArgs, name: string): string[] {
+  const value = flagString(args, name);
+  if (value === undefined) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+}
+
 export function flagBoolean(args: ParsedArgs, name: string): boolean {
   return args.flags[name] === true || args.flags[name] === "true";
 }

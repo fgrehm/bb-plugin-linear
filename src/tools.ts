@@ -586,7 +586,7 @@ export function registerTools(bb: BbPluginApi, deps: ToolDeps): void {
   bb.agents.registerTool({
     name: "linear_project_list",
     description:
-      "List the Linear projects the bound teams work on, with their status, lead, dates and how far along they are.",
+      "List the Linear projects the bound teams work on, with their status, lead, dates and how far along they are. Each row carries its project id, which is what a create or a move needs.",
     parameters: z.object({}),
     execute: (_params, ctx) => {
       const current = scope(ctx.projectId);
@@ -614,7 +614,7 @@ export function registerTools(bb: BbPluginApi, deps: ToolDeps): void {
             entry.targetDate === null ? null : `target ${entry.targetDate}`,
             entry.progress === null ? null : `${String(Math.round(entry.progress * 100))}%`,
           ].filter((part): part is string => part !== null && part !== "");
-          return `${entry.name}${parts.length === 0 ? "" : ` — ${parts.join(", ")}`}`;
+          return `${entry.name} (${entry.id})${parts.length === 0 ? "" : ` — ${parts.join(", ")}`}`;
         })
         .join("\n");
     },
@@ -874,6 +874,10 @@ export function registerTools(bb: BbPluginApi, deps: ToolDeps): void {
       assigneeId: z.string().optional(),
       priority: z.number().int().min(0).max(4).optional(),
       parent: z.string().optional().describe("An identifier such as ENG-42 to file this under."),
+      projectId: z
+        .string()
+        .optional()
+        .describe("From linear_project_list. A project the team can see, or the create is refused."),
       labelIds: z.array(z.string()).optional(),
     }),
     presentation: {
@@ -899,6 +903,7 @@ export function registerTools(bb: BbPluginApi, deps: ToolDeps): void {
           ...(params.assigneeId === undefined ? {} : { assigneeId: params.assigneeId }),
           ...(params.priority === undefined ? {} : { priority: params.priority }),
           ...(parent === null ? {} : { parentId: parent.id }),
+          ...(params.projectId === undefined ? {} : { projectId: params.projectId }),
           ...(params.labelIds === undefined ? {} : { labelIds: params.labelIds }),
           clientId: clientId(),
         });

@@ -60,6 +60,21 @@ With agent writes set to **Full**, the additional tools are
 `linear_comment_edit`, and `linear_thread_start`. Comment edits are limited to
 the viewer's own comments. There is deliberately no delete or archive tool.
 
+## Projects
+
+One team can carry several projects, and they are the right way to separate
+work that shares a workflow. `linear_project_list` prints each project's **id**
+as well as its name. A write takes an id, never a name.
+
+`linear_issue_create` takes `projectId` and `labelIds` (both from
+`linear_project_list` and `linear_team_context`). Pass them on the create when
+you know them: creating an issue and then moving it to its project is two
+writes, and there is a window where the issue is in no project at all.
+
+To change a project afterwards, use `linear_issue_update`'s `projectId`, which
+takes an id or `null` to clear it. Labels are different on purpose: add and
+remove them, never replace the set (see above).
+
 ## This thread's Linear work
 
 A thread can work on several issues, with one **current** issue and previous-work

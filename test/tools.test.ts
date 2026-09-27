@@ -145,3 +145,62 @@ describe("pane write agent tools", () => {
     for (const name of NEW_TOOLS) expect(skill).toContain(name);
   });
 });
+
+describe("one team, several projects", () => {
+  /**
+   * The BB Tasks migration shape: one team (AGE), several Linear projects
+   * (BB, BB Marketplace, BB Image), separated by label. Both halves of the
+   * agent-facing path were missing, so neither could be done without falling
+   * back to the UI.
+   */
+  function storeWithProjects() {
+    const store = createTestStore();
+    store.putTeams([team("team_eng", "ENG")], NOW);
+    store.putProjects(
+      [
+        { id: "p_bb", name: "BB", description: null, url: null, statusId: null, leadId: null, startDate: null, targetDate: null, progress: null, updatedAt: NOW },
+        { id: "p_mkt", name: "BB Marketplace", description: null, url: null, statusId: null, leadId: null, startDate: null, targetDate: null, progress: null, updatedAt: NOW },
+      ],
+      [
+        { projectId: "p_bb", teamId: "team_eng" },
+        { projectId: "p_mkt", teamId: "team_eng" },
+      ],
+    );
+    return store;
+  }
+
+  function toolsFor_(store: ReturnType<typeof createTestStore>) {
+    const tools: Array<{ name: string; execute: (...args: never[]) => unknown; parameters: { shape: Record<string, unknown> } }> = [];
+    registerTools(
+      {
+        agents: {
+          registerTool: (tool: never) => tools.push(tool),
+          configure: () => {},
+        },
+      } as never,
+      {
+        store,
+        bindings: () => [
+          { projectId: "project", teamId: "team_eng", role: "primary", boundAt: NOW, origin: "manual" },
+        ],
+      } as never,
+    );
+    return tools;
+  }
+
+  it("prints each project's id, because a name is not a thing a write takes", async () => {
+    const list = toolsFor_(storeWithProjects()).find(
+      (tool) => tool.name === "linear_project_list",
+    );
+    const text = await list?.execute({} as never, { projectId: "project", signal: undefined } as never);
+    expect(text).toContain("BB (p_bb)");
+    expect(text).toContain("BB Marketplace (p_mkt)");
+  });
+
+  it("offers projectId on linear_issue_create", () => {
+    const create = toolsFor_(storeWithProjects()).find(
+      (tool) => tool.name === "linear_issue_create",
+    );
+    expect(Object.keys(create?.parameters.shape ?? {})).toContain("projectId");
+  });
+});

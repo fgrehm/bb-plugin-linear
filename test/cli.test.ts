@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOOLEAN_FLAGS, flagBoolean, flagNumber, flagString, parseArgs } from "../src/cli-args.js";
+import { BOOLEAN_FLAGS, flagBoolean, flagNumber, flagString, flagStrings, parseArgs } from "../src/cli-args.js";
 import { capOutput, definitionList, table } from "../src/cli-format.js";
 import { createCliRunner, type CliEnvironment } from "../src/cli.js";
 import { connectedState } from "../src/select/connection.js";
@@ -108,6 +108,14 @@ describe("parseArgs", () => {
     expect(flagNumber(parseArgs(["x", "--limit", "-4"]), "limit")).toBeUndefined();
     expect(flagNumber(parseArgs(["x", "--limit", "30"]), "limit")).toBe(30);
   });
+
+  it("reads a comma separated flag as a list", () => {
+    // The parser keeps one value per flag name, so `--label a --label b` would
+    // silently keep only `b`. The list is spelled with a comma.
+    expect(flagStrings(parseArgs(["x", "--label", "a, b"]), "label")).toEqual(["a", "b"]);
+    expect(flagStrings(parseArgs(["x", "--label", "a,,b,"]), "label")).toEqual(["a", "b"]);
+    expect(flagStrings(parseArgs(["x"]), "label")).toEqual([]);
+  });
 });
 
 describe("output shaping", () => {
@@ -195,6 +203,66 @@ describe("bb linear", () => {
       }),
     )(["create", "Something", "--priority", "9"], CTX);
     expect(seen).toBeUndefined();
+  });
+
+  it("takes a project and a list of labels on create", async () => {
+    // The migration writes every task into a project and separates them by
+    // label, so a create that can carry neither means create-then-patch for
+    // each issue.
+    let seen: { project: string | undefined; labels: readonly string[] } | null = null;
+    await createCliRunner(
+      environment({
+        create: async (args) => {
+          seen = { project: args.project, labels: args.labels };
+          return { ok: true, message: "ok" };
+        },
+      }),
+    )(["create", "Ship", "--project", "BB", "--label", "marketplace, upstream"], CTX);
+    expect(seen).toEqual({ project: "BB", labels: ["marketplace", "upstream"] });
+  });
+
+  it("scopes create by the project it was run from, not by its --project", async () => {
+    // `create --project BB` names a **Linear** project. Reading that same flag
+    // as a bb project id scoped the write to a bb project called "BB", which
+    // is not one, and the write came back as "not visible to you".
+    let seen: string | undefined = "unset";
+    await createCliRunner(
+      environment({
+        create: async (args) => {
+          seen = args.projectId;
+          return { ok: true, message: "ok" };
+        },
+      }),
+    )(["create", "Ship", "--project", "BB"], { ...CTX, projectId: "proj_from_cwd" });
+    expect(seen).toBe("proj_from_cwd");
+  });
+
+  it("scopes set by the project it was run from, not by its --project", async () => {
+    // Same collision, and this is the one that bit: `bb linear set AGE-4
+    // --project BB` resolved the scope to a bb project named "BB".
+    let seen: string | undefined = "unset";
+    await createCliRunner(
+      environment({
+        set: async (args) => {
+          seen = args.projectId;
+          return { ok: true, message: "ok" };
+        },
+      }),
+    )(["set", "AGE-4", "--project", "BB"], { ...CTX, projectId: "proj_from_cwd" });
+    expect(seen).toBe("proj_from_cwd");
+  });
+
+  it("drops an empty label segment rather than matching an empty name", async () => {
+    let seen: readonly string[] | null = null;
+    await createCliRunner(
+      environment({
+        create: async (args) => {
+          seen = args.labels;
+          return { ok: true, message: "ok" };
+        },
+      }),
+    )(["create", "Ship", "--label", "upstream,"], CTX);
+    expect(seen).toEqual(["upstream"]);
   });
 
   it("scopes to the project it was run from, not just to --project", async () => {
