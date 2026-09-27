@@ -202,6 +202,13 @@ export function buildPanelView(deps: PanelDeps, query: PanelQuery): PanelView {
     glyphs,
     members,
     priorityLabels,
+    // Label ids become chips on the row, so they need the mirror's names and
+    // colours. Built once for the whole page rather than per row.
+    labels: new Map(
+      deps.store
+        .labels(teamIds)
+        .map((label) => [label.id, { name: label.name, color: label.color }]),
+    ),
     now: deps.now(),
     today,
     // Grouping by state means every glyph inside a group is identical, so the

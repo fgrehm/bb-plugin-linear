@@ -7,6 +7,7 @@ import {
 } from "../src/panel.js";
 import {
   groupRows,
+  MAX_ROW_LABELS,
   initialsOf,
   selectPanelState,
   selectRow,
@@ -127,6 +128,62 @@ describe("selectRow", () => {
     const view = selectRow(row({ stateId: "s_missing" }), rowContext());
     expect(view.stateName).toBe("Unknown state");
     expect(view.tone).toBe("unknown");
+  });
+});
+
+describe("labels on a row", () => {
+  const labelContext = (extra: Record<string, { name: string; color: string | null }> = {}) =>
+    rowContext({
+      labels: new Map([
+        ["l_mkt", { name: "marketplace", color: "#5e6ad2" }],
+        ["l_image", { name: "image", color: "#0ea5e9" }],
+        ["l_review", { name: "in-review", color: "#f2c94c" }],
+        ...Object.entries(extra),
+      ]),
+    });
+
+  it("turns the mirror's label ids into named chips", () => {
+    // The mirror stores ids; the eye cannot read an id. This is the whole
+    // point once one team's issues sit in several projects.
+    const view = selectRow(row({ labelIds: ["l_mkt", "l_image"] }), labelContext());
+    expect(view.labels).toEqual([
+      { name: "marketplace", color: "#5e6ad2" },
+      { name: "image", color: "#0ea5e9" },
+    ]);
+    expect(view.labelCount).toBe(2);
+  });
+
+  it("caps the drawn chips and counts the rest", () => {
+    const view = selectRow(row({ labelIds: ["l_mkt", "l_image", "l_review"] }), labelContext());
+    expect(view.labels).toHaveLength(MAX_ROW_LABELS);
+    // Counted, not dropped, so the row can say +1 and the name can say three.
+    expect(view.labelCount).toBe(3);
+    expect(view.accessibleName).toContain("marketplace, image, in-review");
+  });
+
+  it("draws nothing for an unlabelled issue", () => {
+    const view = selectRow(row({ labelIds: [] }), labelContext());
+    expect(view.labels).toEqual([]);
+    expect(view.labelCount).toBe(0);
+  });
+
+  it("drops an id the mirror has no row for", () => {
+    // A label deleted in Linear leaves its id behind on rows that were not
+    // re-fetched. A blank chip is worse than no chip.
+    const view = selectRow(row({ labelIds: ["l_gone", "l_mkt"] }), labelContext());
+    expect(view.labels.map((label) => label.name)).toEqual(["marketplace"]);
+  });
+
+  it("still renders when the caller has no label map at all", () => {
+    // The map is optional so a caller that has not loaded labels yet does not
+    // have to construct an empty one to get rows.
+    const view = selectRow(row({ labelIds: ["l_mkt"] }), rowContext());
+    expect(view.labels).toEqual([]);
+  });
+
+  it("puts every label in the accessible name, not just the drawn ones", () => {
+    const view = selectRow(row({ labelIds: ["l_mkt", "l_image", "l_review"] }), labelContext());
+    expect(view.accessibleName).toContain("labelled");
   });
 });
 

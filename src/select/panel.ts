@@ -172,10 +172,25 @@ export interface RowContext {
   readonly glyphs: ReadonlyMap<string, GlyphSpec>;
   readonly members: ReadonlyMap<string, MemberRow>;
   readonly priorityLabels: ReadonlyMap<number, string>;
+  /** Label id to its name and colour, for the row's chips. Optional so a
+   *  caller that has not loaded the mirror's labels still renders rows. */
+  readonly labels?: ReadonlyMap<string, { readonly name: string; readonly color: string | null }>;
   readonly now: number;
   readonly today: string;
   readonly lead: LeadKind;
 }
+
+/**
+ * How many labels a row draws.
+ *
+ * Two, then a count. A row in this panel is a line of 13px type next to a
+ * fixed-width identifier, and the labels are the only thing separating one
+ * project's work from another's once they share a team — which is the normal
+ * case now, not the exception. So they are worth real width, but not all of
+ * it: a row with six labels becomes a legend, and forty legends is a wall.
+ * The full set stays in the accessible name and the tooltip.
+ */
+export const MAX_ROW_LABELS = 2;
 
 export function selectRow(
   issue: IssueRow,
@@ -219,6 +234,18 @@ export function selectRow(
           avatarUrl: member.avatarUrl,
         };
 
+  // The mirror stores label ids as a flattened JSON array, matching Linear's
+  // own `Issue.labelIds`. An id with no row in the mirror is dropped rather
+  // than rendered blank: a label deleted in Linear is not a label.
+  const allLabels = (context.labels === undefined
+    ? []
+    : issue.labelIds
+        .map((id) => context.labels?.get(id))
+        .filter((label): label is { readonly name: string; readonly color: string | null } =>
+          label !== undefined,
+        )
+  ).map((label) => ({ name: label.name, color: label.color }));
+
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -235,6 +262,8 @@ export function selectRow(
     priorityMark: mark,
     updatedAt: issue.updatedAt,
     age: formatRelativeCompact(issue.updatedAt, context.now),
+    labels: allLabels.slice(0, MAX_ROW_LABELS),
+    labelCount: allLabels.length,
     secondLine,
     accessibleName: accessibleName({
       identifier: issue.identifier,
@@ -243,6 +272,7 @@ export function selectRow(
       assignee: assignee?.name ?? null,
       priorityLabel: mark === null ? null : priorityLabel,
       secondLine: secondLine?.text ?? null,
+      labels: allLabels.map((label) => label.name),
     }),
     struckThrough: tone === "canceled",
   };
@@ -263,10 +293,14 @@ function accessibleName(input: {
   assignee: string | null;
   priorityLabel: string | null;
   secondLine: string | null;
+  /** Every label, not just the drawn ones: a sighted reader hovers the row for
+   *  the rest, and a screen reader never sees the cap at all. */
+  labels: readonly string[];
 }): string {
   const parts = [`${input.identifier}, ${input.title}`, input.stateName];
   if (input.priorityLabel !== null && input.priorityLabel !== "") parts.push(input.priorityLabel);
   if (input.assignee !== null) parts.push(`assigned to ${input.assignee}`);
+  if (input.labels.length > 0) parts.push(`labelled ${input.labels.join(", ")}`);
   if (input.secondLine !== null) parts.push(input.secondLine);
   return parts.join(", ");
 }

@@ -476,3 +476,20 @@ checklist maintained in `docs/smoke.md` from M2 on.
   team whose work is in no project gets no control rather than an empty one.
   Beat: a hardcoded pair of projects, which is a control that lists things this
   workspace does not have and hides the one it does.
+
+## 2026-09-27 — labels on the rows
+
+- Every issue row draws its labels as chips, resolved from the mirror's id
+  array into Linear's own names and colours. On a team whose work spans several
+  projects they are often the only thing telling two rows apart, which a line
+  of truncated titles cannot do.
+- **On the title line, not the second one.** The second line is a single slot
+  with a priority order, and a label is not competing for attention with a
+  failing pull request: it is a permanent property of the row. Taking that
+  slot would have made labels lose to cycle names on every row.
+- Two chips, then a count. A row is 13px type beside a fixed-width identifier;
+  a row with six labels becomes a legend, and forty legends is a wall. Every
+  label is still in the accessible name, so the cap is a width decision rather
+  than a hiding one.
+- A label id with no row in the mirror is dropped rather than drawn blank: a
+  label deleted in Linear leaves its id on rows that were not re-fetched.

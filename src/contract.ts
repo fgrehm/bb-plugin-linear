@@ -188,6 +188,12 @@ export const issueRowViewSchema = z.object({
   priorityMark: priorityMarkSchema,
   updatedAt: z.number(),
   age: z.string(),
+  /** The issue's labels, in Linear's own names, capped by the selector rather
+   *  than here. Empty for the many issues that carry none. */
+  labels: z.array(z.object({ name: z.string(), color: z.string().nullable() })),
+  /** How many the issue actually has, including any beyond the drawn ones, so
+   *  the row can say "+3" rather than silently dropping them. */
+  labelCount: z.number(),
   secondLine: secondLineSchema.nullable(),
   accessibleName: z.string(),
   struckThrough: z.boolean(),

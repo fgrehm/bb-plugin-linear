@@ -135,6 +135,48 @@ function RowBody({
         </span>
 
         {/*
+          Labels, after the title and before the metadata.
+
+          On the title line rather than the second one, because the second line
+          is a single slot with a priority order and labels are not competing
+          for attention with a failing pull request — they are a permanent
+          property of the row. Once a team carries several projects, they are
+          often the only thing telling two rows apart, which is exactly what a
+          line of truncated titles cannot do on its own.
+
+          Capped by the selector, with a count for the rest, and the whole set
+          in the tooltip and the accessible name: nothing is hidden from
+          someone who goes looking for it.
+        */}
+        {row.labels.length > 0 ? (
+          <span className="flex shrink-0 items-center gap-1" aria-hidden>
+            {row.labels.map((label) => (
+              <span
+                key={label.name}
+                className="max-w-[7rem] truncate rounded px-1.5 py-px text-[10px] leading-4"
+                style={
+                  label.color === null
+                    ? {
+                        backgroundColor: "color-mix(in oklab, currentColor 12%, transparent)",
+                      }
+                    : {
+                        backgroundColor: `color-mix(in oklab, ${label.color} 20%, transparent)`,
+                        color: label.color,
+                      }
+                }
+              >
+                {label.name}
+              </span>
+            ))}
+            {row.labelCount > row.labels.length ? (
+              <span className="bbl-text text-[10px] leading-4 text-muted-foreground">
+                +{row.labelCount - row.labels.length}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+
+        {/*
           One grid cell, two layers, crossfaded.
 
           The metadata and the row's actions occupy the same space, so
